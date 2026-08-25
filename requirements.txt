@@ -1,0 +1,11 @@
+# Core (torch/torchvision are expected to be provided by the environment --
+# pin them yourself to match your CUDA build; this repo was set up against
+# torch 2.9.1+cu129).
+nuscenes-devkit>=1.1.11
+numpy<2
+pillow
+matplotlib
+pyquaternion
+
+# dev
+pytest

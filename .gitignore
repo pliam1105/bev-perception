@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+CLAUDE.md
+
+# Datasets (nuScenes lives outside git)
+data/
+out/
