@@ -1,0 +1,101 @@
+{
+  "configById": {
+    "3D!main": {
+      "cameraState": {
+        "distance": 70,
+        "perspective": true,
+        "phi": 55,
+        "thetaOffset": 45,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "LIDAR_TOP",
+      "scene": {
+        "enableStats": false,
+        "transforms": {
+          "showLabel": false,
+          "axisScale": 2
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/lidar": {
+          "visible": true,
+          "colorMode": "colormap",
+          "colorField": "z",
+          "colorMap": "turbo",
+          "pointSize": 2,
+          "flatColor": "#ffffff"
+        },
+        "/boxes": {
+          "visible": true
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point"
+      }
+    },
+    "Image!cam_front_left": {
+      "imageMode": { "imageTopic": "/camera/CAM_FRONT_LEFT" }
+    },
+    "Image!cam_front": {
+      "imageMode": { "imageTopic": "/camera/CAM_FRONT" }
+    },
+    "Image!cam_front_right": {
+      "imageMode": { "imageTopic": "/camera/CAM_FRONT_RIGHT" }
+    },
+    "Image!cam_back_left": {
+      "imageMode": { "imageTopic": "/camera/CAM_BACK_LEFT" }
+    },
+    "Image!cam_back": {
+      "imageMode": { "imageTopic": "/camera/CAM_BACK" }
+    },
+    "Image!cam_back_right": {
+      "imageMode": { "imageTopic": "/camera/CAM_BACK_RIGHT" }
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!main",
+    "second": {
+      "direction": "column",
+      "first": {
+        "direction": "row",
+        "first": "Image!cam_front_left",
+        "second": {
+          "direction": "row",
+          "first": "Image!cam_front",
+          "second": "Image!cam_front_right",
+          "splitPercentage": 50
+        },
+        "splitPercentage": 33.34
+      },
+      "second": {
+        "direction": "row",
+        "first": "Image!cam_back_left",
+        "second": {
+          "direction": "row",
+          "first": "Image!cam_back",
+          "second": "Image!cam_back_right",
+          "splitPercentage": 50
+        },
+        "splitPercentage": 33.34
+      },
+      "splitPercentage": 50
+    },
+    "splitPercentage": 45
+  }
+}
