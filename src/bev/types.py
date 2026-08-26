@@ -27,7 +27,6 @@ CAMERAS: tuple[str, ...] = (
 )
 LIDAR: str = "LIDAR_TOP"
 
-
 @dataclass(frozen=True)
 class SensorCalib:
     """Raw calibration for one sample_data record. Quaternions are unit wxyz.

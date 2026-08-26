@@ -20,6 +20,7 @@ import numpy as np
 
 from nuscenes.nuscenes import NuScenes
 
+from bev.raster import BEVRaster, BEVRasterStore
 from bev.types import (
     CAMERAS,
     LIDAR,
@@ -53,6 +54,7 @@ class SceneSample:
     cameras: dict[str, CameraFrame]
     lidar: LidarFrame | None
     boxes: list[Annotation]
+    bev_raster: BEVRaster | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,7 @@ class NuScenesSceneReader:
         *,
         cameras: Sequence[str] = CAMERAS,
         include_lidar: bool = True,
+        bev_raster_root: Path | str | None = None,
     ) -> None:
         self.dataroot = Path(dataroot)
         if not self.dataroot.exists():
@@ -93,6 +96,7 @@ class NuScenesSceneReader:
         self.cameras = tuple(cameras)
         self.include_lidar = include_lidar
         self.nusc = NuScenes(version=version, dataroot=str(self.dataroot), verbose=False)
+        self.raster_store = BEVRasterStore.open(bev_raster_root) if bev_raster_root else None
 
     def list_scenes(self) -> list[tuple[str, str]]:
         """Return `(token, name)` for every scene in this split."""
@@ -130,6 +134,10 @@ class NuScenesSceneReader:
 
         boxes = [build_annotation(self.nusc, ann_token) for ann_token in sample["anns"]]
 
+        bev_raster = (
+            self.raster_store.load(sample["token"]) if self.raster_store else None
+        )
+
         return SceneSample(
             sample_token=sample["token"],
             scene_name=scene_name,
@@ -137,6 +145,7 @@ class NuScenesSceneReader:
             cameras=cams,
             lidar=lidar,
             boxes=boxes,
+            bev_raster=bev_raster,
         )
 
     def read_sample_data(
