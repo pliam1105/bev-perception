@@ -139,6 +139,7 @@ _SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 # foxglove.PackedElementField numeric type enum.
+_FIELD_UINT8 = 1
 _FIELD_FLOAT32 = 7
 
 
@@ -273,9 +274,37 @@ class FoxgloveBridge:
         frame_id: str,
         points_xyz: np.ndarray,
         timestamp_us: int,
+        rgb: tuple[int, int, int] | None = None,
     ) -> None:
-        """Publish an (N, >=3) float array; only x, y, z are packed."""
+        """Publish an (N, >=3) float array (x, y, z).
+
+        With `rgb` (0-255 per channel), a red/green/blue byte triple is packed
+        per point so the color travels in the data and does not depend on the
+        viewer's per-topic color setting.
+        """
         xyz = np.ascontiguousarray(points_xyz[:, :3], dtype=np.float32)
+        n = len(xyz)
+        fields = [
+            {"name": "x", "offset": 0, "type": _FIELD_FLOAT32},
+            {"name": "y", "offset": 4, "type": _FIELD_FLOAT32},
+            {"name": "z", "offset": 8, "type": _FIELD_FLOAT32},
+        ]
+        if rgb is None:
+            stride = 12
+            buffer = xyz.tobytes()
+        else:
+            stride = 16
+            packed = np.zeros((n, stride), dtype=np.uint8)
+            packed[:, :12] = xyz.view(np.uint8).reshape(n, 12)
+            packed[:, 12:15] = np.asarray(rgb, dtype=np.uint8)
+            packed[:, 15] = 255  # alpha
+            fields += [
+                {"name": "red", "offset": 12, "type": _FIELD_UINT8},
+                {"name": "green", "offset": 13, "type": _FIELD_UINT8},
+                {"name": "blue", "offset": 14, "type": _FIELD_UINT8},
+                {"name": "alpha", "offset": 15, "type": _FIELD_UINT8},
+            ]
+            buffer = packed.tobytes()
         msg = {
             "timestamp": _stamp(timestamp_us),
             "frame_id": frame_id,
@@ -283,13 +312,9 @@ class FoxgloveBridge:
                 "position": {"x": 0.0, "y": 0.0, "z": 0.0},
                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
             },
-            "point_stride": 12,
-            "fields": [
-                {"name": "x", "offset": 0, "type": _FIELD_FLOAT32},
-                {"name": "y", "offset": 4, "type": _FIELD_FLOAT32},
-                {"name": "z", "offset": 8, "type": _FIELD_FLOAT32},
-            ],
-            "data": base64.b64encode(xyz.tobytes()).decode("ascii"),
+            "point_stride": stride,
+            "fields": fields,
+            "data": base64.b64encode(buffer).decode("ascii"),
         }
         self._publish(topic, "foxglove.PointCloud", msg, timestamp_us)
 

@@ -34,6 +34,16 @@
         },
         "/boxes": {
           "visible": true
+        },
+        "/bev/drivable_area": {
+          "visible": true,
+          "colorMode": "rgba-fields",
+          "pointSize": 8
+        },
+        "/bev/vehicle": {
+          "visible": true,
+          "colorMode": "rgba-fields",
+          "pointSize": 12
         }
       },
       "layers": {},
@@ -60,6 +70,9 @@
     },
     "Image!cam_back_right": {
       "imageMode": { "imageTopic": "/camera/CAM_BACK_RIGHT" }
+    },
+    "Image!bev": {
+      "imageMode": { "imageTopic": "/bev/image" }
     }
   },
   "globalVariables": {},
@@ -69,7 +82,12 @@
   },
   "layout": {
     "direction": "row",
-    "first": "3D!main",
+    "first": {
+      "direction": "column",
+      "first": "3D!main",
+      "second": "Image!bev",
+      "splitPercentage": 62
+    },
     "second": {
       "direction": "column",
       "first": {

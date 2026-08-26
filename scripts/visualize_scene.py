@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
@@ -40,6 +42,12 @@ def parse_args() -> argparse.Namespace:
         help="stream all sample_data (sweeps included) at full sensor rate, not just keyframes",
     )
     parser.add_argument("--no-lidar", action="store_true")
+    parser.add_argument(
+        "--bev-raster-root",
+        type=Path,
+        default=None,
+        help="precomputed BEV raster store; publishes each keyframe's GT to /bev/<layer>",
+    )
     return parser.parse_args()
 
 
@@ -69,6 +77,48 @@ class MonotonicClock:
         self._loop_base = self._last + self._gap
 
 
+# High-contrast per-layer colors, reused by the 3D clouds and the top-down image.
+BEV_COLORS: dict[str, tuple[int, int, int]] = {
+    "drivable_area": (110, 200, 255),  # cyan
+    "vehicle": (255, 120, 20),         # orange
+}
+_BEV_FALLBACK = (200, 200, 200)
+_BEV_BG = (18, 18, 22)
+
+
+def publish_bev_raster(bridge: FoxgloveBridge, bev_raster, frame: str, timestamp: int) -> None:
+    """Publish each occupied BEV cell as a colored point at ground level, one
+    cloud per layer. The color is packed per point so it shows regardless of the
+    viewer's color setting.
+    """
+    spec = bev_raster.spec
+    data = np.asarray(bev_raster.data)
+    for c, name in enumerate(bev_raster.layer_names):
+        occ = np.argwhere(data[c] > 0)  # (K, 2): rows are (j=y-index, i=x-index)
+        if occ.size == 0:
+            continue
+        xs = (occ[:, 1] + 0.5) * spec.resolution + spec.x_min
+        ys = (occ[:, 0] + 0.5) * spec.resolution + spec.y_min
+        pts = np.stack([xs, ys, np.zeros(len(occ))], axis=1)
+        bridge.publish_pointcloud(f"/bev/{name}", frame, pts, timestamp, rgb=BEV_COLORS.get(name, _BEV_FALLBACK))
+
+
+def publish_bev_image(bridge: FoxgloveBridge, bev_raster, timestamp: int) -> None:
+    """Publish a top-down RGB image of the raster (forward = up) to /bev/image."""
+    import io
+    from PIL import Image
+
+    data = np.asarray(bev_raster.data)
+    h, w = data.shape[1], data.shape[2]
+    img = np.full((h, w, 3), _BEV_BG, dtype=np.uint8)
+    for c, name in enumerate(bev_raster.layer_names):
+        img[data[c] > 0] = BEV_COLORS.get(name, _BEV_FALLBACK)
+    img = np.flipud(img)  # row 0 is +y (ego forward) at the top
+    buf = io.BytesIO()
+    Image.fromarray(img, "RGB").save(buf, format="PNG")
+    bridge.publish_compressed_image("/bev/image", "bev", buf.getvalue(), timestamp, image_format="png")
+
+
 def publish_sample(bridge: FoxgloveBridge, sample: SceneSample, clock: MonotonicClock) -> None:
     for channel, cam in sample.cameras.items():
         ego_frame = f"ego/{channel}"
@@ -94,6 +144,11 @@ def publish_sample(bridge: FoxgloveBridge, sample: SceneSample, clock: Monotonic
             "/tf", "ego/LIDAR_TOP", "LIDAR_TOP", lc.sensor2ego_translation, lc.sensor2ego_rotation, t
         )
         bridge.publish_pointcloud("/lidar", "LIDAR_TOP", sample.lidar.points, t)
+        if sample.bev_raster is not None:
+            publish_bev_raster(bridge, sample.bev_raster, "ego/LIDAR_TOP", t)
+
+    if sample.bev_raster is not None:
+        publish_bev_image(bridge, sample.bev_raster, clock.map(sample.timestamp))
 
     if sample.boxes:
         bridge.publish_boxes("/boxes", "global", sample.boxes, clock.map(sample.timestamp))
@@ -169,7 +224,10 @@ def main() -> int:
     args = parse_args()
 
     reader = NuScenesSceneReader(
-        args.dataroot, version=args.version, include_lidar=not args.no_lidar
+        args.dataroot,
+        version=args.version,
+        include_lidar=not args.no_lidar,
+        bev_raster_root=args.bev_raster_root,
     )
     scenes = reader.list_scenes()
     if not scenes:
