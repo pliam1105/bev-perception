@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from bev.viz.foxglove_bridge import FoxgloveBridge  # noqa: E402
-from bev.viz.scene_reader import NuScenesSceneReader, SceneSample  # noqa: E402
+from bev.viz.scene_reader import NuScenesSceneReader, SceneSample, SensorEvent  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,6 +34,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--rate", type=float, default=1.0, help="playback speed multiplier")
     parser.add_argument("--once", action="store_true", help="play the scene once instead of replaying on loop")
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="stream all sample_data (sweeps included) at full sensor rate, not just keyframes",
+    )
     parser.add_argument("--no-lidar", action="store_true")
     return parser.parse_args()
 
@@ -68,7 +73,7 @@ def publish_sample(bridge: FoxgloveBridge, sample: SceneSample, clock: Monotonic
     for channel, cam in sample.cameras.items():
         ego_frame = f"ego/{channel}"
         c = cam.calib
-        t = clock.map(c.timestamp_us)
+        t = clock.map(c.timestamp)
         bridge.publish_transform(
             "/tf", "global", ego_frame, c.ego2global_translation, c.ego2global_rotation, t
         )
@@ -81,7 +86,7 @@ def publish_sample(bridge: FoxgloveBridge, sample: SceneSample, clock: Monotonic
 
     if sample.lidar is not None:
         lc = sample.lidar.calib
-        t = clock.map(lc.timestamp_us)
+        t = clock.map(lc.timestamp)
         bridge.publish_transform(
             "/tf", "global", "ego/LIDAR_TOP", lc.ego2global_translation, lc.ego2global_rotation, t
         )
@@ -91,7 +96,55 @@ def publish_sample(bridge: FoxgloveBridge, sample: SceneSample, clock: Monotonic
         bridge.publish_pointcloud("/lidar", "LIDAR_TOP", sample.lidar.points, t)
 
     if sample.boxes:
-        bridge.publish_boxes("/boxes", "global", sample.boxes, clock.map(sample.timestamp_us))
+        bridge.publish_boxes("/boxes", "global", sample.boxes, clock.map(sample.timestamp))
+
+
+def publish_event(bridge: FoxgloveBridge, event: SensorEvent, clock: MonotonicClock) -> None:
+    t = clock.map(event.timestamp)
+
+    if event.camera is not None:
+        ch = event.channel
+        ego_frame = f"ego/{ch}"
+        c = event.camera.calib
+        bridge.publish_transform(
+            "/tf", "global", ego_frame, c.ego2global_translation, c.ego2global_rotation, t
+        )
+        bridge.publish_transform(
+            "/tf", ego_frame, ch, c.sensor2ego_translation, c.sensor2ego_rotation, t
+        )
+        bridge.publish_compressed_image(
+            f"/camera/{ch}", ch, event.camera.image_path.read_bytes(), t
+        )
+
+    if event.lidar is not None:
+        lc = event.lidar.calib
+        bridge.publish_transform(
+            "/tf", "global", "ego/LIDAR_TOP", lc.ego2global_translation, lc.ego2global_rotation, t
+        )
+        bridge.publish_transform(
+            "/tf", "ego/LIDAR_TOP", "LIDAR_TOP", lc.sensor2ego_translation, lc.sensor2ego_rotation, t
+        )
+        bridge.publish_pointcloud("/lidar", "LIDAR_TOP", event.lidar.points, t)
+
+    if event.boxes:
+        bridge.publish_boxes("/boxes", "global", event.boxes, t)
+
+
+def play_once_full(
+    bridge: FoxgloveBridge, reader: NuScenesSceneReader, scene: str, rate: float, clock: MonotonicClock
+) -> None:
+    prev_ts: int | None = None
+    count = 0
+    for event in reader.read_sample_data(scene):
+        if prev_ts is not None and rate > 0:
+            dt = (event.timestamp - prev_ts) / 1e6 / rate
+            if dt > 0:
+                time.sleep(dt)
+        prev_ts = event.timestamp
+        publish_event(bridge, event, clock)
+        count += 1
+        if count % 100 == 0:
+            print(f"  {count} events  (last: {event.channel} @ t={event.timestamp})")
 
 
 def play_once(
@@ -100,13 +153,13 @@ def play_once(
     prev_ts: int | None = None
     for sample in reader.read_scene(scene):
         if prev_ts is not None and rate > 0:
-            dt = (sample.timestamp_us - prev_ts) / 1e6 / rate
+            dt = (sample.timestamp - prev_ts) / 1e6 / rate
             if dt > 0:
                 time.sleep(dt)
-        prev_ts = sample.timestamp_us
+        prev_ts = sample.timestamp
         publish_sample(bridge, sample, clock)
         print(
-            f"  t={sample.timestamp_us}  cams={len(sample.cameras)}  "
+            f"  t={sample.timestamp}  cams={len(sample.cameras)}  "
             f"lidar={'-' if sample.lidar is None else sample.lidar.points.shape[0]}  "
             f"boxes={len(sample.boxes)}"
         )
@@ -128,9 +181,10 @@ def main() -> int:
     with FoxgloveBridge(port=args.port) as bridge:
         print(f"Foxglove bridge live on ws://localhost:{args.port}  — connect the app, Ctrl-C to stop")
         clock = MonotonicClock()
+        play = play_once_full if args.full else play_once
         try:
             while True:
-                play_once(bridge, reader, scene, args.rate, clock)
+                play(bridge, reader, scene, args.rate, clock)
                 if args.once:
                     break
                 clock.next_loop()

@@ -160,6 +160,7 @@ class FoxgloveBridge:
         self._thread = threading.Thread(target=self._run_loop, name="foxglove-bridge", daemon=True)
         self._server: FoxgloveServer | None = None
         self._ready = threading.Event()
+        self._stop_event: asyncio.Event | None = None
         self._channels: dict[str, int] = {}
         self._channels_lock = threading.Lock()
 
@@ -170,8 +171,10 @@ class FoxgloveBridge:
         self._ready.wait()
 
     def stop(self) -> None:
-        if self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        # Signal the coroutine to leave its `async with`, so FoxgloveServer
+        # shuts down cleanly before the loop thread exits.
+        if self._stop_event is not None and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._stop_event.set)
         self._thread.join(timeout=5)
 
     def __enter__(self) -> "FoxgloveBridge":
@@ -183,14 +186,17 @@ class FoxgloveBridge:
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
-        self._loop.run_until_complete(self._serve_forever())
+        try:
+            self._loop.run_until_complete(self._serve_forever())
+        finally:
+            self._loop.close()
 
     async def _serve_forever(self) -> None:
+        self._stop_event = asyncio.Event()
         async with FoxgloveServer(self.host, self.port, self.name) as server:
             self._server = server
             self._ready.set()
-            # Park until stop() stops the loop.
-            await asyncio.Event().wait()
+            await self._stop_event.wait()
 
     # ---- channel plumbing ------------------------------------------------
 
@@ -291,25 +297,26 @@ class FoxgloveBridge:
         self,
         topic: str,
         frame_id: str,
-        boxes: Iterable[Any],
+        annotations: Iterable[Any],
         timestamp_us: int,
         color: tuple[float, float, float, float] = (0.2, 0.7, 1.0, 0.4),
     ) -> None:
-        """Render 3D boxes as a SceneUpdate of cubes.
+        """Render annotation boxes as a SceneUpdate of cubes.
 
-        Each box needs ``.token``, ``.center`` (xyz), ``.wlh`` (width, length,
-        height), and ``.rotation`` (wxyz) in ``frame_id``. nuScenes ``wlh`` maps
-        to a Foxglove cube size of (length, width, height) along x, y, z.
+        Each item is a ``bev.types.Annotation`` whose ``.box`` is a nuScenes Box
+        in ``frame_id``. nuScenes ``wlh`` (width, length, height) maps to a
+        Foxglove cube size of (length, width, height) along x, y, z.
         """
         r, g, b, a = color
         cubes = []
-        for box in boxes:
+        for ann in annotations:
+            box = ann.box
             w, length, h = (float(v) for v in box.wlh)
             cubes.append(
                 {
                     "pose": {
                         "position": _vec3(box.center),
-                        "orientation": _quat_wxyz_to_xyzw(box.rotation),
+                        "orientation": _quat_wxyz_to_xyzw(box.orientation.elements),
                     },
                     "size": {"x": length, "y": w, "z": h},
                     "color": {"r": r, "g": g, "b": b, "a": a},

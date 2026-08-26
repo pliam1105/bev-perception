@@ -1,12 +1,18 @@
 """Per-scene nuScenes reader for visualization use.
 
-Walks one scene's keyframes in chronological order and yields raw per-sample
-data: image paths, lidar point arrays, per-sensor calibration (sensor->ego,
-ego->global, camera intrinsic), and 3D annotation boxes in the global frame.
+Two ways to walk a scene:
+
+- ``read_scene`` yields keyframes (``sample``): all six cameras + lidar + boxes
+  grouped at one instant, at the ~2 Hz annotated rate.
+- ``read_sample_data`` yields the full ``sample_data`` stream (sweeps included)
+  as individual per-sensor events in global timestamp order, at each sensor's
+  own rate. Annotations exist only at keyframes, so boxes ride on the lidar
+  keyframe events.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import heapq
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Sequence
 
@@ -14,28 +20,14 @@ import numpy as np
 
 from nuscenes.nuscenes import NuScenes
 
-
-CAMERAS: tuple[str, ...] = (
-    "CAM_FRONT_LEFT",
-    "CAM_FRONT",
-    "CAM_FRONT_RIGHT",
-    "CAM_BACK_LEFT",
-    "CAM_BACK",
-    "CAM_BACK_RIGHT",
+from bev.types import (
+    CAMERAS,
+    LIDAR,
+    Annotation,
+    SensorCalib,
+    build_annotation,
+    build_calib,
 )
-LIDAR: str = "LIDAR_TOP"
-
-
-@dataclass(frozen=True)
-class SensorCalib:
-    """Raw calibration for one sample_data record. Quaternions are wxyz."""
-
-    sensor2ego_translation: np.ndarray  # (3,) float64
-    sensor2ego_rotation: np.ndarray  # (4,) float64, wxyz
-    ego2global_translation: np.ndarray  # (3,) float64
-    ego2global_rotation: np.ndarray  # (4,) float64, wxyz
-    intrinsic: np.ndarray | None  # (3, 3) float64 for cameras, None for lidar
-    timestamp_us: int
 
 
 @dataclass(frozen=True)
@@ -54,27 +46,29 @@ class LidarFrame:
 
 
 @dataclass(frozen=True)
-class Box3D:
-    """One sample_annotation, kept in the global frame exactly as nuScenes stores it."""
-
-    token: str
-    category: str
-    center: np.ndarray  # (3,) float64 in the global frame
-    wlh: np.ndarray  # (3,) float64: width, length, height (nuScenes convention)
-    rotation: np.ndarray  # (4,) float64 wxyz in the global frame
-    num_lidar_pts: int
-    num_radar_pts: int
-    visibility: str
-
-
-@dataclass(frozen=True)
 class SceneSample:
     sample_token: str
     scene_name: str
-    timestamp_us: int
+    timestamp: int
     cameras: dict[str, CameraFrame]
     lidar: LidarFrame | None
-    boxes: list[Box3D]
+    boxes: list[Annotation]
+
+
+@dataclass(frozen=True)
+class SensorEvent:
+    """One sample_data record: a single sensor firing at its own timestamp.
+
+    Exactly one of ``camera`` / ``lidar`` is set. ``boxes`` is non-empty only on
+    lidar keyframe events, since annotations are defined per keyframe.
+    """
+
+    channel: str
+    timestamp: int
+    is_key_frame: bool
+    camera: CameraFrame | None = None
+    lidar: LidarFrame | None = None
+    boxes: list[Annotation] = field(default_factory=list)
 
 
 class NuScenesSceneReader:
@@ -134,62 +128,119 @@ class NuScenesSceneReader:
         if self.include_lidar and LIDAR in sample["data"]:
             lidar = self._lidar_frame(sample["data"][LIDAR])
 
-        boxes = [self._box(ann_token) for ann_token in sample["anns"]]
+        boxes = [build_annotation(self.nusc, ann_token) for ann_token in sample["anns"]]
 
         return SceneSample(
             sample_token=sample["token"],
             scene_name=scene_name,
-            timestamp_us=sample["timestamp"],
+            timestamp=sample["timestamp"],
             cameras=cams,
             lidar=lidar,
             boxes=boxes,
         )
 
-    def _calib_for(self, sd_token: str) -> tuple[SensorCalib, dict]:
-        sd = self.nusc.get("sample_data", sd_token)
+    def read_sample_data(
+        self,
+        scene: str,
+        *,
+        channels: Sequence[str] | None = None,
+        keyframes_only: bool = False,
+    ) -> Iterator[SensorEvent]:
+        """Yield the full sample_data stream for a scene in timestamp order.
+
+        Unlike `read_scene`, this includes intermediate sweeps and emits one
+        sensor event at a time (cameras and lidar fire asynchronously at their
+        own rates). `scene` accepts a name or token. `channels` defaults to the
+        reader's cameras plus LIDAR_TOP when `include_lidar` is set.
+        """
+        rec = self._resolve_scene(scene)
+        scene_samples = self._scene_sample_tokens(rec)
+        if channels is None:
+            channels = (*self.cameras, *([LIDAR] if self.include_lidar else ()))
+
+        chains = [
+            self._channel_sample_data(ch, rec, scene_samples, keyframes_only)
+            for ch in channels
+        ]
+        for sd in heapq.merge(*chains, key=lambda r: r["timestamp"]):
+            yield self._event(sd, scene_samples)
+
+    def _scene_sample_tokens(self, rec: dict) -> set[str]:
+        tokens: set[str] = set()
+        token = rec["first_sample_token"]
+        while token:
+            tokens.add(token)
+            token = self.nusc.get("sample", token)["next"]
+        return tokens
+
+    def _channel_sample_data(
+        self, channel: str, rec: dict, scene_samples: set[str], keyframes_only: bool
+    ) -> Iterator[dict]:
+        """Walk one channel's sample_data chain, bounded to this scene, in time order."""
+        first_sample = self.nusc.get("sample", rec["first_sample_token"])
+        if channel not in first_sample["data"]:
+            return
+        sd = self.nusc.get("sample_data", first_sample["data"][channel])
+        # The keyframe sits mid-chain; rewind to the scene's earliest sweep first.
+        while sd["prev"]:
+            prev = self.nusc.get("sample_data", sd["prev"])
+            if prev["sample_token"] not in scene_samples:
+                break
+            sd = prev
+        while True:
+            if sd["sample_token"] in scene_samples and (not keyframes_only or sd["is_key_frame"]):
+                yield sd
+            if not sd["next"]:
+                break
+            nxt = self.nusc.get("sample_data", sd["next"])
+            if nxt["sample_token"] not in scene_samples:
+                break
+            sd = nxt
+
+    def _event(self, sd: dict, scene_samples: set[str]) -> SensorEvent:
         cs = self.nusc.get("calibrated_sensor", sd["calibrated_sensor_token"])
-        ep = self.nusc.get("ego_pose", sd["ego_pose_token"])
-        intrinsic = None
-        if cs.get("camera_intrinsic"):
-            intrinsic = np.asarray(cs["camera_intrinsic"], dtype=np.float64)
-            if intrinsic.shape != (3, 3):
-                intrinsic = None
-        calib = SensorCalib(
-            sensor2ego_translation=np.asarray(cs["translation"], dtype=np.float64),
-            sensor2ego_rotation=np.asarray(cs["rotation"], dtype=np.float64),
-            ego2global_translation=np.asarray(ep["translation"], dtype=np.float64),
-            ego2global_rotation=np.asarray(ep["rotation"], dtype=np.float64),
-            intrinsic=intrinsic,
-            timestamp_us=sd["timestamp"],
+        sensor = self.nusc.get("sensor", cs["sensor_token"])
+        channel, modality = sensor["channel"], sensor["modality"]
+        calib = build_calib(self.nusc, sd)
+
+        camera = lidar = None
+        boxes: list[Annotation] = []
+        if modality == "camera":
+            camera = CameraFrame(
+                channel=channel,
+                image_path=self.dataroot / sd["filename"],
+                width=int(sd["width"]),
+                height=int(sd["height"]),
+                calib=calib,
+            )
+        elif modality == "lidar":
+            pts = np.fromfile(self.dataroot / sd["filename"], dtype=np.float32).reshape(-1, 5)
+            lidar = LidarFrame(points=pts, calib=calib)
+            if sd["is_key_frame"]:
+                sample = self.nusc.get("sample", sd["sample_token"])
+                boxes = [build_annotation(self.nusc, t) for t in sample["anns"]]
+
+        return SensorEvent(
+            channel=channel,
+            timestamp=sd["timestamp"],
+            is_key_frame=sd["is_key_frame"],
+            camera=camera,
+            lidar=lidar,
+            boxes=boxes,
         )
-        return calib, sd
 
     def _camera_frame(self, channel: str, sd_token: str) -> CameraFrame:
-        calib, sd = self._calib_for(sd_token)
+        sd = self.nusc.get("sample_data", sd_token)
         return CameraFrame(
             channel=channel,
             image_path=self.dataroot / sd["filename"],
             width=int(sd["width"]),
             height=int(sd["height"]),
-            calib=calib,
+            calib=build_calib(self.nusc, sd),
         )
 
     def _lidar_frame(self, sd_token: str) -> LidarFrame:
-        calib, sd = self._calib_for(sd_token)
+        sd = self.nusc.get("sample_data", sd_token)
         # nuScenes .pcd.bin: contiguous float32, five columns (x, y, z, intensity, ring).
-        path = self.dataroot / sd["filename"]
-        pts = np.fromfile(path, dtype=np.float32).reshape(-1, 5)
-        return LidarFrame(points=pts, calib=calib)
-
-    def _box(self, ann_token: str) -> Box3D:
-        a = self.nusc.get("sample_annotation", ann_token)
-        return Box3D(
-            token=ann_token,
-            category=a["category_name"],
-            center=np.asarray(a["translation"], dtype=np.float64),
-            wlh=np.asarray(a["size"], dtype=np.float64),
-            rotation=np.asarray(a["rotation"], dtype=np.float64),
-            num_lidar_pts=int(a.get("num_lidar_pts", 0)),
-            num_radar_pts=int(a.get("num_radar_pts", 0)),
-            visibility=str(a.get("visibility_token", "")),
-        )
+        pts = np.fromfile(self.dataroot / sd["filename"], dtype=np.float32).reshape(-1, 5)
+        return LidarFrame(points=pts, calib=build_calib(self.nusc, sd))
