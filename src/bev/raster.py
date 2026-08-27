@@ -86,7 +86,7 @@ class BEVRaster:
     spec: BEVGridSpec
     sample_token: str
 
-@dataclass(frozen=True)
+@dataclass
 class BEVRasterBatch:
     data: torch.Tensor  # (N, C, H, W)
     layer_names: tuple[str, ...]
