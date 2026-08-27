@@ -59,7 +59,7 @@ class ResNetBackbone(nn.Module):
 
 class BEVLift(nn.Module):
     """
-    Lifting module that uses the outputs of the backbone (feature map at stride 4 of the input images) and composes them in the BEV frame through projection at various BEV heights.
+    Lifting module that uses the outputs (feature map at stride 4 of the input images) of a CNN backbone (like ImageNet) and composes them in the BEV frame through projection at various BEV heights.
 
     It doesn't add any new parameters on top of the backbone.
     """
@@ -89,3 +89,35 @@ class BEVLift(nn.Module):
                     (backbone_coords[:,:,1,:,:,:] < backbone_out.shape[3])
         bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, backbone_coords[:,:,1,:,:,:].clamp(0,backbone_out.shape[3]-1), backbone_coords[:,:,0,:,:,:].clamp(0,backbone_out.shape[2]-1)].movedim(-1,2), 0.0) # (B,N,128,nx,ny,nz)
         return (bev_from_backbone.sum(dim=1)/camera_mask.sum(dim=1).unsqueeze(1).clamp(min=1)).sum(dim=4) # mean over cameras, sum over z
+
+class BEVSeg(nn.Module):
+    """
+    Segmentation head that uses the output of a BEV lifting module (like BEVLift) to produce segmentation results for a set of labels in the BEV grid.
+    """
+    def __init__(self, bev_raster_labels: tuple[str, ...]):
+        super().__init__()
+        self.bev_raster_labels = bev_raster_labels
+        self.convs = nn.Sequential(
+            nn.Conv2d(128, 64, (5,5), padding=(2,2)),
+            nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(),
+            nn.Conv2d(64, 32, (3,3), padding=(1,1)),
+            nn.BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(),
+            nn.Conv2d(32, len(self.bev_raster_labels), (1,1)),
+        )
+    
+    def forward(self, x: torch.Tensor): # in: (B, 128, nx, ny), out: (B, num_labels, nx, ny)
+        return self.convs(x)
+
+class CameraBEVSeg(nn.Module):
+    """
+    A composition of the ResNet backbone, BEV lifting, and BEV segmentation models to get BEV segments directly from input image data.
+    """
+    def __init__(self, bev_raster_spec: BEVGridSpec, bev_raster_labels: tuple[str, ...], min_z : float, max_z: float, num_z: int):
+        super().__init__()
+        self.bevlift = BEVLift(ResNetBackbone(), bev_raster_spec, min_z, max_z, num_z)
+        self.bevseg = BEVSeg(bev_raster_labels)
+    
+    def forward(self, x: CameraDataBatch):
+        return self.bevseg(self.bevlift(x))
