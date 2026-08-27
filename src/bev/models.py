@@ -85,9 +85,9 @@ class BEVLift(nn.Module):
                     (backbone_coords[:,:,0,:,:,:] >= 0) & \
                     (backbone_coords[:,:,1,:,:,:] >= 0) & \
                     (backbone_coords[:,:,0,:,:,:] >= 0) &  \
-                    (backbone_coords[:,:,0,:,:,:] < backbone_out.shape[2]) & \
+                    (backbone_coords[:,:,0,:,:,:] < backbone_out.shape[4]) & \
                     (backbone_coords[:,:,1,:,:,:] < backbone_out.shape[3])
-        bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, backbone_coords[:,:,1,:,:,:].clamp(0,backbone_out.shape[3]-1), backbone_coords[:,:,0,:,:,:].clamp(0,backbone_out.shape[2]-1)].movedim(-1,2), 0.0) # (B,N,128,nx,ny,nz)
+        bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, backbone_coords[:,:,1,:,:,:].clamp(0,backbone_out.shape[3]-1), backbone_coords[:,:,0,:,:,:].clamp(0,backbone_out.shape[4]-1)].movedim(-1,2), 0.0) # (B,N,128,nx,ny,nz)
         return (bev_from_backbone.sum(dim=1)/camera_mask.sum(dim=1).unsqueeze(1).clamp(min=1)).sum(dim=4) # mean over cameras, sum over z
 
 class BEVSeg(nn.Module):
@@ -121,3 +121,41 @@ class CameraBEVSeg(nn.Module):
     
     def forward(self, x: CameraDataBatch):
         return self.bevseg(self.bevlift(x))
+
+class FocalLoss(nn.Module):
+    """
+    Focal loss (per-pixel) applied on the respective classes.
+    """
+    def __init__(self, gamma: float = 2, alphas: tuple[float, ...] = (0.25, 0.5)):
+        super().__init__()
+        self.gamma = gamma
+        self.register_buffer("alphas", torch.Tensor(alphas).reshape(1,-1,1,1))
+
+    def forward(self, logits: torch.Tensor, target: torch.Tensor): # (B, num_labels, nx, ny)
+        p = torch.sigmoid(logits)
+        return (self.alphas*(1-p)**self.gamma*(-F.logsigmoid(logits)*target)+(1-self.alphas)*p**self.gamma*(-F.logsigmoid(-logits)*(1-target))).mean()
+
+class DiceLoss(nn.Module):
+    """
+    Dice loss (across pixels) applied on the respcetive classes.
+    """
+    def __init__(self, eps: float = 1e-5):
+        super().__init__()
+        self.eps = eps
+    
+    def forward(self, logits: torch.Tensor, target: torch.Tensor): # (B, num_labels, nx, ny)
+        p = torch.sigmoid(logits)
+        return (1-(2*(p*target).sum(dim=(2,3))+self.eps)/(p.sum(dim=(2,3))+target.sum(dim=(2,3))+self.eps)).mean()
+
+class SegLoss(nn.Module):
+    """
+    Weighed focal with Dice loss for the segmentation output vs ground truth.
+    """
+    def __init__(self, gamma: float = 2, alphas: tuple[float, ...] = (0.25, 0.5), eps: float = 1e-5, lamda: float = 1):
+        super().__init__()
+        self.focal_loss = FocalLoss(gamma, alphas)
+        self.dice_loss = DiceLoss(eps)
+        self.lamda = lamda
+
+    def forward(self, logits: torch.Tensor, target: torch.Tensor): # (B, num_labels, nx, ny)
+        return self.focal_loss(logits, target)+self.lamda*self.dice_loss(logits, target)

@@ -94,6 +94,7 @@ class BEVRasterBatch:
 
     def to(self, device: str):
         self.data = self.data.to(device)
+        return self
 
 
 class BEVRasterStore:
