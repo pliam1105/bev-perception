@@ -92,6 +92,9 @@ class BEVRasterBatch:
     layer_names: tuple[str, ...]
     spec: BEVGridSpec
 
+    def to(self, device: str):
+        self.data = self.data.to(device)
+
 
 class BEVRasterStore:
     """Read/write precomputed BEV rasters under a directory, keyed by sample_token."""
