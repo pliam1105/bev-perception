@@ -20,7 +20,7 @@ class Transform:
         return Transform(self.translation + self.rotation @other.translation, self.rotation @ other.rotation, self.timestamp)
 
     def toMatrix(self) -> np.ndarray:
-        return np.stack([np.concatenate([self.rotation, self.translation.reshape(-1, 1)], axis=1), np.array([0, 0, 0, 1])], axis=0)
+        return np.concatenate([np.concatenate([self.rotation, self.translation.reshape(-1, 1)], axis=1), np.array([[0, 0, 0, 1]])], axis=0)
 
     def fromMatrix(matrix: np.ndarray, timestamp: int) -> Transform:
         return Transform(matrix[0:3, 3], matrix[0:3, 0:3], timestamp)

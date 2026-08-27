@@ -86,6 +86,12 @@ class BEVRaster:
     spec: BEVGridSpec
     sample_token: str
 
+@dataclass(frozen=True)
+class BEVRasterBatch:
+    data: torch.Tensor  # (N, C, H, W)
+    layer_names: tuple[str, ...]
+    spec: BEVGridSpec
+
 
 class BEVRasterStore:
     """Read/write precomputed BEV rasters under a directory, keyed by sample_token."""
