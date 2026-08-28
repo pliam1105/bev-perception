@@ -29,7 +29,7 @@ class ResNetBackbone(nn.Module):
     def __init__(self):
         super().__init__()
         self.resnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-        self.resnet.requires_grad_(False)
+        # self.resnet.requires_grad_(False)
         self._freeze_bn()
         self.stem = nn.Sequential(self.resnet.conv1, self.resnet.bn1, self.resnet.relu, self.resnet.maxpool)
         self.layer5conv = nn.Conv2d(512, 256, (1,1)) # applied on upsampled layer 4 before adding to layer 3 to smooth and get layer 5

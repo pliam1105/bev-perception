@@ -103,3 +103,71 @@ def plot_bev_predictions(
     if was_training:
         model.train()
     return fig
+
+
+@torch.no_grad()
+def plot_train_val_predictions(
+    model: torch.nn.Module,
+    train_camera: CameraDataBatch,
+    train_target: torch.Tensor,
+    val_camera: CameraDataBatch,
+    val_target: torch.Tensor,
+    layer_names: Sequence[str],
+    *,
+    n: int = 5,
+    thresh: float = 0.5,
+    save_path: Path | str | None = None,
+    show: bool = False,
+    title: str | None = None,
+):
+    """Render `n` train and `n` val frames side by side: for each row,
+    [train pred | train GT | val pred | val GT]. Inference runs one frame at a
+    time to stay within memory. Returns the matplotlib figure.
+    """
+    import matplotlib
+
+    if save_path is not None and not show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    was_training = model.training
+    model.eval()
+
+    groups = (("train", train_camera, train_target), ("val", val_camera, val_target))
+    n = min(n, train_target.shape[0], val_target.shape[0])
+    fig, axes = plt.subplots(n, 4, figsize=(12.4, 3.1 * n), squeeze=False)
+    for i in range(n):
+        for g, (tag, cam, tgt) in enumerate(groups):
+            single = CameraDataBatch(
+                channels=cam.channels,
+                images=cam.images[i : i + 1],
+                bev2pixel=cam.bev2pixel[i : i + 1],
+            )
+            prob = torch.sigmoid(model(single))[0].cpu().numpy()
+            pred = prob >= thresh
+            gt = tgt[i].cpu().numpy()
+            ious = [_iou(pred[c], gt[c] > 0.5) for c in range(len(layer_names))]
+            iou_str = " ".join(f"{n_[:4]}={v:.2f}" for n_, v in zip(layer_names, ious))
+
+            ax_pred, ax_gt = axes[i][2 * g], axes[i][2 * g + 1]
+            ax_pred.imshow(_bev_rgb(pred, layer_names))
+            ax_gt.imshow(_bev_rgb(gt, layer_names))
+            for ax in (ax_pred, ax_gt):
+                ax.plot(pred.shape[2] / 2, pred.shape[1] / 2, "r+", ms=8)
+                ax.set_xticks([]); ax.set_yticks([])
+            ax_pred.set_title(f"{tag} pred  {iou_str}", fontsize=8)
+            ax_gt.set_title(f"{tag} GT", fontsize=8)
+        axes[i][0].set_ylabel(f"frame {i}", fontsize=9)
+
+    if title:
+        fig.suptitle(title, fontsize=11)
+    fig.tight_layout()
+    if save_path is not None:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=110)
+    if show:
+        plt.show()
+
+    if was_training:
+        model.train()
+    return fig
