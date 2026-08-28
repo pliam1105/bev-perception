@@ -160,6 +160,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--y-range", type=float, nargs=2, default=(-50.0, 50.0))
     p.add_argument("--resolution", type=float, default=0.5)
     p.add_argument("--overwrite", action="store_true", help="rewrite existing rasters")
+    p.add_argument("--require-files", action="store_true", help="only rasterize keyframes whose sensor files exist (partial downloads)")
     p.add_argument(
         "--map-paths",
         type=Path,
@@ -190,6 +191,7 @@ def main() -> int:
             cameras=(),  # rasterization reads only boxes
             load_lidar=True,
             load_annotations=True,
+            require_files=args.require_files,
         )
     )
     print(

@@ -42,6 +42,7 @@ class NuScenesConfig:
     load_lidar: bool = False
     load_annotations: bool = True
     bev_raster_root: Path | None = None  # precomputed BEV rasters (see scripts/rasterize_bev.py)
+    require_files: bool = False  # keep only keyframes whose sensor files exist on disk (partial downloads)
     verbose: bool = False
 
 
@@ -136,9 +137,29 @@ class NuScenesBEVDataset(torch.utils.data.Dataset):
         rows.sort(key=lambda r: (r[0], r[1]))
         self.sample_tokens: list[str] = [r[2] for r in rows]
 
+        if config.require_files:
+            # partial downloads (a few blobs) hold only some scenes' sensor files;
+            # drop keyframes whose camera/lidar files are not on disk.
+            self.sample_tokens = [t for t in self.sample_tokens if self._files_present(t)]
+
         self.raster_store = (
             BEVRasterStore.open(config.bev_raster_root) if config.bev_raster_root else None
         )
+
+    def _files_present(self, token: str) -> bool:
+        sample = self.nusc.get("sample", token)
+        for channel in self.cameras:
+            sd_token = sample["data"].get(channel)
+            if sd_token is None:
+                return False
+            fn = self.nusc.get("sample_data", sd_token)["filename"]
+            if not (self.dataroot / fn).is_file():
+                return False
+        if self.config.load_lidar and LIDAR in sample["data"]:
+            fn = self.nusc.get("sample_data", sample["data"][LIDAR])["filename"]
+            if not (self.dataroot / fn).is_file():
+                return False
+        return True
 
     def __len__(self) -> int:
         return len(self.sample_tokens)

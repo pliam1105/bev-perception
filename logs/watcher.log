@@ -1,0 +1,15 @@
+FIRST_EPOCH_DONE
+=== pipeline.log tail ===
+wrote 1353 rasters to data/bev_rasters/trainval_val
+[04:20:22] [pipeline] rasters written: train=5715  val=1353
+[04:20:22] [pipeline] killing idle Jupyter kernel to free the GPU (notebook file is untouched; restart it when you're back)
+[04:20:27] [pipeline] GPU free: 5661 MiB
+[04:20:27] [pipeline] starting training (finetune from warmup, batch 1)
+device=cuda  train=5715 keyframes  val=1353 keyframes  layers=('drivable_area', 'vehicle')
+/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4317.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+loaded warmup models/frozen-warmup/camera_bev_seg_best.pt  (missing=0 unexpected=0)
+epoch   0  train 0.8107  val 0.8107  patience 0
+=== download.log tail ===
+[04:10:44] done v1.0-trainval02_blobs.tgz  (disk now: 49G free)
+[04:10:44] ALL DOWNLOADS COMPLETE

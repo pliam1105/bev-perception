@@ -1,0 +1,170 @@
+[03:20:13] [pipeline] waiting for download to complete (logs/download.log)
+[04:11:13] [pipeline] download complete. disk free: 49G
+[04:11:13] [pipeline] rasterizing train split -> data/bev_rasters/trainval_train
+split 'train': 5715 keyframes -> data/bev_rasters/trainval_train
+grid 200x200 @ 0.5 m, layers=['drivable_area', 'vehicle']
+maps: 4 mask(s)
+  [50] 096deff9b75f4340891ed28a47d959b1
+  [100] 244ddb48c04649909772fdf7bc0b6716
+  [150] 3dada2dc8f19436a9dbe7fe74ccecbd1
+  [200] 2f281f72c3e44abdb702ae0e736acaa2
+  [250] 8dc4f09cb42a4d9b9224cd95531be568
+  [300] 98e3c44681984a688e9569e3e6ce9a73
+  [350] 02ed75a0814d417896b8299058c3ce04
+  [400] c8685cbee9914e99a773a0d763ecac9f
+  [450] ff39a0c1ceb64bb0b356113aa7e3cbfa
+  [500] 76ffc80a634145edb25497dc7a44b683
+  [550] f86d135b91ae4ec0ae47bbd48b1cf4be
+  [600] 3b59a92128704e429148bc68d07463c6
+  [650] 12608626834e4129aaa88dbb7b6f0675
+  [700] 49c048582c7e4f7caed8d51010fe2a46
+  [750] e2b3f0fd26f24bc8a1b7ef3e2a2f82c8
+  [800] 2e5e0c67be84489f8a2a372ba56fef2b
+  [850] fc503f0ac00b4c8e9291971975cfb793
+  [900] 354468082c884c91b9052d587156247f
+  [950] fe5e8498a4494dcf88d261fbf690973b
+  [1000] 2704f1f555a24ca18324a052c8c3b5a4
+  [1050] 63200db0d9f945fa899f191256269eca
+  [1100] 17f302aa135e441bae78b53af27fbc0b
+  [1150] d1efc32b92154428b0385544eb888d14
+  [1200] be4d6ffa6ec14e9ab422a1c6f74c8818
+  [1250] 2c974b12b5ad4dd8906396b705a91a1d
+  [1300] 8bceded5e2cc45178d75212822f4eea1
+  [1350] 6263a13856164281a87d8575f2fb4a8f
+  [1400] c49beb5994a247c4874d803031d7babc
+  [1450] e6ad1352eca14b09aa22fc4c3d433666
+  [1500] 6694572abf0a4759ace8206ed972a462
+  [1550] 0a2836bb3ae74d3b9b274fafc3c0cfd4
+  [1600] 971f7df7e4f64081a7b22089a8532caf
+  [1650] fb0ade0d8184482b825934ec2f92fe7b
+  [1700] a03dedbff28247ff8d8479ff8cdcf8cd
+  [1750] 52b2885a69d24447a5fd88dfa53e45ba
+  [1800] 63635629790c4571ac4efcd4a3b6a5a1
+  [1850] c2167aa0fa674d1da8fb84b4de4c31e3
+  [1900] 46ae8aadd64e42d9aabc5a2f51d5b553
+  [1950] 462b43335cb644a09ffac60cfde8c257
+  [2000] 77f39e67da224f38b3b3a6cad805e619
+  [2050] c0445a9aa4a2413996e8eb7b0b3c75e9
+  [2100] 13b659ff8b004f8b9285cefeb975af49
+  [2150] d4f97f43798a4c989b318ea1ec60b5e8
+  [2200] 9253e18a84404e25b1eb4433905ad579
+  [2250] 7804ea8261754fc09104f489e6d9cede
+  [2300] 60f41e1d3e62404b8c156f7e8c1807ad
+  [2350] c9c16c6da913418584e88113e4fb0bb7
+  [2400] d0eed45f8dea47aba7ab2d12ff39a2e7
+  [2450] 4fdb16ccaba44fb2861894e7d2857369
+  [2500] 1684139e3c414e7e8139be39eef0a028
+  [2550] b1e4fb756521459da814aea7ba00e6d6
+  [2600] f7bce2611f5943a0bd4679fbc840f335
+  [2650] 655613c5a57d4ad3a3062d3110e608c2
+  [2700] f76dc79b39874904994b30384c70275f
+  [2750] b79ad95c2bca4049bdfef8b479dddcc3
+  [2800] 1b9f554207aa4d50a3c4c0351ab65c10
+  [2850] 7d384a5654434d88b188f8cb368701af
+  [2900] ac55bd5b07364b9587c9b698883259b2
+  [2950] 37ab2d88d07846ef96d5227e9c5a15d7
+  [3000] 9506f315a9734e318daab980fedbe5e7
+  [3050] a3fd031b3ec64e0b8173317e88927729
+  [3100] 0ad1dc79bcf642838081403fe51c4a5b
+  [3150] 57ca739310c34dc290ca6d14411e3d49
+  [3200] d612f4f52ae9475d9b7d415cb23d0dfe
+  [3250] bd5296a480d84e7ebfae0b5eb405246a
+  [3300] b20a3fdac00a4215a244a0a9e7868f59
+  [3350] 93affec0a38849ea8f01424b69397563
+  [3400] ec54ea277df94826953a7bba154b6ca4
+  [3450] 80e84ccf181a428e939af2fbde7d4211
+  [3500] 6e2711e1505c4acfaa5bb1d79ace05ed
+  [3550] 6fd1645245204a6fb826bd15e4019e23
+  [3600] 08d8f55f3d0f46ff8c7490f8ac23e8ea
+  [3650] cfc098728fb64a6d8cc60e0f8b268198
+  [3700] a30918be475345c583ee7311a62119f5
+  [3750] d10b140e450541f9b32f8be701f3ba37
+  [3800] 33639e8f9d974fd58999e9b9a619b2a1
+  [3850] 07d09f687a7c494fa8237c511fea0fe8
+  [3900] fd698c48a19249dcb4ae3c150a26a0a3
+  [3950] b2e2ffeabf91451cb31a79649bfd95df
+  [4000] 9b319d72e7ef429faf15c9cf0b0863b1
+  [4050] a07514d8819e434d817f464ff676ca36
+  [4100] 99f6bb873f054e56a351b6b33324c595
+  [4150] fa35b6e5af684e9faecbaf321adb103f
+  [4200] 64f955eb7d2c488ea9c8fefa747c8cd9
+  [4250] a71b19643dbc488e97323303442d1a21
+  [4300] 1af2a6e96de64584b00285820f1757c2
+  [4350] 05fee16065df4a869ed5e1ace1ff0fd5
+  [4400] bcfe4c33810c496f9a9674a869c8f101
+  [4450] 8c995fe75e4b40898d4926d01156db02
+  [4500] 0d20bc6987f24697b4d3685683fa7e25
+  [4550] 378a3a3e9af346308ab9dff8ced46d9c
+  [4600] dd334edfe7734c5484845fef07b5de97
+  [4650] cef8685a54774521b75d0f6ec1e07041
+  [4700] 4113ec8b67944976bf7eb58e2b162448
+  [4750] ddb90573389740d7918f70cdf0354b96
+  [4800] 73c04e824a214a54922b03391a1549f3
+  [4850] a1469f29c0a0477d84bd1251c3ef9b56
+  [4900] a0e65e293c764ccb9aeb8e6f446db631
+  [4950] a246fa24b01c46fb8b37ff0c0fd1084e
+  [5000] 55fae959b104482b9f87533319e02e2f
+  [5050] a43568a562a043f38af0ec0b71520af7
+  [5100] 2129f7f0aa3e45a5b58df9ddd62ecab2
+  [5150] d61ef2ae3bd54793b8beec55061940f0
+  [5200] f4c4a1d61cd14f16b3e95c43aee83d5a
+  [5250] 5747b9d1d0f64f7a9fa2be5106bf3b0f
+  [5300] b8269fe9c79e4693b8cebd6f6256ae45
+  [5350] f275e0cb783648f69d039437fb7193cf
+  [5400] 273ee10b061744d8a23f353cc0dd1973
+  [5450] a8443b1558524f9195c7293ae9c27585
+  [5500] 33197b9563d74095b9fc8bb06f831694
+  [5550] c4d496c9fb944890aa9f3cb0d17dd2a1
+  [5600] 2344bc7a26b34e479a81ce3993b7ac45
+  [5650] d271704e7e654bbba0e04dab443d1ffb
+  [5700] b98a735cc5ac41ad9b605e8cc9272012
+wrote 5715 rasters to data/bev_rasters/trainval_train
+[04:18:27] [pipeline] rasterizing val split -> data/bev_rasters/trainval_val
+split 'val': 1353 keyframes -> data/bev_rasters/trainval_val
+grid 200x200 @ 0.5 m, layers=['drivable_area', 'vehicle']
+maps: 4 mask(s)
+  [50] 745713b3baae4ea18de5c74eb4d06bb8
+  [100] 50584518abf2443da57a124020086b69
+  [150] d948e055e4e24a539b84b3880bcfe772
+  [200] 0bb62a68055249e381b039bf54b0ccf8
+  [250] 05e312eae68c454c86cea669ee26ced1
+  [300] 7b86bda4144e46b08b5c8aea57bfa969
+  [350] 789b705cdbcd4e5bb43812186d612d7d
+  [400] e1b5c775be134db696ce22413d195c72
+  [450] 34dc0f073e864d70b6e2b09c5b3ed032
+  [500] 9be682790a634b91b334b633fa43010a
+  [550] 32e2619879854a83953c08ec8557f3bb
+  [600] 20df43740cba4411a810e204501af71a
+  [650] 821df5bcd0744d7280b23e6284fb8396
+  [700] b2a10e8a03c843f69a00bc872fc18170
+  [750] 3b63e8f8098e4e049dcff5532a349c18
+  [800] 5369488db9e94abcaacb56ed00a0def6
+  [850] 4d53bb70174b4e8db3913f50a7bc1590
+  [900] 5a88a123c7674dd3a6d800e80b1598b2
+  [950] fa51f1910942494cbe396640010fea64
+  [1000] 4dfb0052fe944420acddf5d376755dff
+  [1050] 938d0ee9763d44b6a01b7dbbe2240c85
+  [1100] 32fb01b0d61a4724a60cb38a2b03fdaf
+  [1150] dc75bab3f7164bfeb399c768fde0f620
+  [1200] 877f55a6d8324fefb5e0f5e0bac3d7c1
+  [1250] ac25dbfbcd3843c7b6023e59aedc5175
+  [1300] 5a9cb38d50ba4282b6f26249a06ed700
+  [1350] b9ea04a6121d4a8bb00199b885aa5ef0
+wrote 1353 rasters to data/bev_rasters/trainval_val
+[04:20:22] [pipeline] rasters written: train=5715  val=1353
+[04:20:22] [pipeline] killing idle Jupyter kernel to free the GPU (notebook file is untouched; restart it when you're back)
+[04:20:27] [pipeline] GPU free: 5661 MiB
+[04:20:27] [pipeline] starting training (finetune from warmup, batch 1)
+device=cuda  train=5715 keyframes  val=1353 keyframes  layers=('drivable_area', 'vehicle')
+/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4317.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+loaded warmup models/frozen-warmup/camera_bev_seg_best.pt  (missing=0 unexpected=0)
+epoch   0  train 0.8107  val 0.8107  patience 0
+epoch   1  train 0.7683  val 0.8138  patience 0
+epoch   2  train 0.7400  val 0.8202  patience 1
+epoch   3  train 0.7139  val 0.8596  patience 2
+epoch   4  train 0.6905  val 0.8827  patience 3
+epoch   5  train 0.6702  val 0.8557  patience 4
+early stopping at epoch 5 (best val 0.8107)
+done. best val 0.8107  -> models/trainval/best.pt
+[08:03:11] [pipeline] PIPELINE COMPLETE. best checkpoint: models/trainval/best.pt  viz: viz_trainval/
