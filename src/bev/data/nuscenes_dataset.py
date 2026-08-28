@@ -58,10 +58,14 @@ class CameraDataBatch:
     channels: tuple[str, ...] # N
     images: torch.Tensor  # uint8, (B, N, 3, H, W)
     bev2pixel: torch.Tensor # float32, (B, N, 3, 4)
+    intrinsics: torch.Tensor # float32 (B, N, 3, 3)
+    bev2ego: torch.Tensor # float32 (B, N, 4, 4)
 
     def to(self, device: str):
         self.images = self.images.to(device)
         self.bev2pixel = self.bev2pixel.to(device)
+        self.intrinsics = self.intrinsics.to(device)
+        self.bev2ego = self.bev2ego.to(device)
         return self
 
 @dataclass(frozen=True)
@@ -89,6 +93,8 @@ class SampleBatch:
     def pin_memory(self: SampleBatch):
         self.camera_batch.images = self.camera_batch.images.pin_memory()
         self.camera_batch.bev2pixel = self.camera_batch.bev2pixel.pin_memory()
+        self.camera_batch.intrinsics = self.camera_batch.intrinsics.pin_memory()
+        self.camera_batch.bev2ego = self.camera_batch.bev2ego.pin_memory()
         self.bev_raster_batch.data = self.bev_raster_batch.data.pin_memory()
 
         return self
@@ -219,11 +225,16 @@ def collate_fn(batch: Sequence[Sample]):
     H_NEW = 448
     W_NEW = 800
     imgs = torch.stack([torch.stack([(camera.image.float()/255.0 - torch.Tensor([0.485,0.456,0.406]).reshape(3,1,1))/torch.Tensor([0.229,0.224,0.225]).reshape(3,1,1) for camera in sample.cameras.values()]) for sample in batch])
+    intrinsics = torch.stack([torch.stack([torch.diag(torch.tensor([W_NEW/camera.image.shape[2], H_NEW/camera.image.shape[1], 1])) @  camera.calib.intrinsic.float() for camera in batch[i].cameras.values()]) for i in range(len(batch))])
+    bev2ego = torch.stack([torch.stack([torch.tensor(Transform(camera.calib.sensor2ego_translation.numpy(), pyquaternion.Quaternion(camera.calib.sensor2ego_rotation.numpy()).rotation_matrix, batch[i].timestamp).inverse().toMatrix(), dtype=torch.float32) for camera in batch[i].cameras.values()]) for i in range(len(batch))])
     return SampleBatch(
         camera_batch=CameraDataBatch(
             channels = tuple(batch[0].cameras.keys()), # assume all samples have the same cameras
             images = F.interpolate(imgs.reshape(imgs.shape[0]*imgs.shape[1], *imgs.shape[2:]), size=(H_NEW, W_NEW), mode='bilinear', align_corners=False, antialias=True).reshape(imgs.shape[0], imgs.shape[1], 3, H_NEW, W_NEW),
-            bev2pixel = torch.stack([torch.stack([torch.diag(torch.tensor([W_NEW/camera.image.shape[2], H_NEW/camera.image.shape[1], 1])) @  camera.calib.intrinsic.float() @ torch.tensor(Transform(camera.calib.sensor2ego_translation.numpy(), pyquaternion.Quaternion(camera.calib.sensor2ego_rotation.numpy()).rotation_matrix, batch[i].timestamp).inverse().toMatrix()[:3, :], dtype=torch.float32) for camera in batch[i].cameras.values()]) for i in range(len(batch))]),
+            intrinsics = intrinsics,
+            bev2ego = bev2ego,
+            bev2pixel = intrinsics @ bev2ego[...,:3,:],
+            # bev2pixel = torch.stack([torch.stack([torch.diag(torch.tensor([W_NEW/camera.image.shape[2], H_NEW/camera.image.shape[1], 1])) @  camera.calib.intrinsic.float() @ torch.tensor(Transform(camera.calib.sensor2ego_translation.numpy(), pyquaternion.Quaternion(camera.calib.sensor2ego_rotation.numpy()).rotation_matrix, batch[i].timestamp).inverse().toMatrix()[:3, :], dtype=torch.float32) for camera in batch[i].cameras.values()]) for i in range(len(batch))]),
         ),
         bev_raster_batch=BEVRasterBatch(
             data = torch.stack([sample.bev_raster.data for sample in batch]),
