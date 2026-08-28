@@ -48,9 +48,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch", type=int, default=2)
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--min-z", type=float, default=-5.0)
-    p.add_argument("--max-z", type=float, default=5.0)
-    p.add_argument("--num-z", type=int, default=4)
+    p.add_argument("--min-z", type=float, default=-0.5)
+    p.add_argument("--max-z", type=float, default=3.0)
+    p.add_argument("--num-z", type=int, default=8)
+    p.add_argument("--min-d", type=float, default=4.0)
+    p.add_argument("--max-d", type=float, default=45.0)
+    p.add_argument("--D", type=int, default=41)
     return p.parse_args()
 
 
@@ -77,7 +80,8 @@ def main() -> int:
     print(f"overfitting {args.batch} frames on {device}; layers={labels}")
 
     model = CameraBEVSeg(
-        ds.raster_store.spec, labels, args.min_z, args.max_z, args.num_z
+        ds.raster_store.spec, labels, args.min_z, args.max_z, args.num_z,
+        args.min_d, args.max_d, args.D,
     ).to(device)
     seg_loss = SegLoss().to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)

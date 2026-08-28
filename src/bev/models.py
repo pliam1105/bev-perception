@@ -57,15 +57,31 @@ class ResNetBackbone(nn.Module):
 
         return layer7_out 
 
+class FeatureDepthPredictor(nn.Module):
+    """
+    An MLP on top of the features computed by the backbone, to predict the depth of each pixel as a distribution over D depth bins.
+    """
+    def __init__(self, D: int = 45):
+        super().__init__()
+        self.depth_predictor = nn.Sequential(
+            nn.Conv2d(128, 64, (1,1)),
+            nn.ReLU(),
+            nn.Conv2d(64, D, (1,1)),
+        )
+
+    def forward(self, x: torch.Tensor): # (B,128,H/4,W/4) -> (B, D, H/4, W/4)
+        return self.depth_predictor(x)
+
 class BEVLift(nn.Module):
     """
     Lifting module that uses the outputs (feature map at stride 4 of the input images) of a CNN backbone (like ImageNet) and composes them in the BEV frame through projection at various BEV heights.
 
     It doesn't add any new parameters on top of the backbone.
     """
-    def __init__(self, backbone: nn.Module, bev_raster_spec: BEVGridSpec, min_z : float, max_z: float, num_z: int):
+    def __init__(self, backbone: nn.Module, depth_predictor: nn.Module, bev_raster_spec: BEVGridSpec, min_z : float, max_z: float, num_z: int, min_d: float, max_d: float, D: int):
         super().__init__()
         self.backbone = backbone
+        self.depth_predictor = depth_predictor
         self.bev_raster_spec = bev_raster_spec
         ii, jj, iz = torch.meshgrid([torch.arange(self.bev_raster_spec.nx), torch.arange(self.bev_raster_spec.ny), torch.arange(num_z)]) # (nx, ny, nz)
         zlin = torch.linspace(min_z, max_z, num_z)
@@ -73,21 +89,39 @@ class BEVLift(nn.Module):
         xs = self.bev_raster_spec.x_min + (ii+0.5)*self.bev_raster_spec.resolution # (nx, ny, nz)
         ys = self.bev_raster_spec.y_min + (jj+0.5)*self.bev_raster_spec.resolution # (nx, ny, nz)
         self.register_buffer("bev_norm_coords", torch.stack([xs, ys, zs, torch.ones_like(xs)])) # (4, nx, ny, nz)
+        self.d_res = (max_d-min_d)/(D-1)
+        self.D = D
+        self.min_d = min_d
+        self.max_d = max_d
 
     def forward(self, x: CameraDataBatch): # out: (B,128,nx,ny)
         backbone_out = self.backbone(x.images.reshape(-1,3,x.images.shape[3],x.images.shape[4])) # (B*N,128,H/4,W/4)
+        depth_out = self.depth_predictor(backbone_out) # (B*N,D,H/4,W/4)
         backbone_out = backbone_out.reshape(x.images.shape[0], x.images.shape[1], backbone_out.shape[1], backbone_out.shape[2], backbone_out.shape[3]) # (B,N,128,H/4,W/4)
+        depth_out = depth_out.reshape(x.images.shape[0], x.images.shape[1], depth_out.shape[1], depth_out.shape[2], depth_out.shape[3]) # (B,N,D,H/4,W/4)
+        depth_probs_out = torch.softmax(depth_out, dim=2) # (B,N,D,H/4,W/4)
         projected_norm_coords = torch.tensordot(x.bev2pixel, self.bev_norm_coords, dims=([3],[0])) # (B,N,3,nx,ny,nz)
+        depth_lift = projected_norm_coords[:,:,2,:,:,:] # (B,N,nx,ny,nz)
         projected_coords = projected_norm_coords[:,:,:2,:,:,:] / projected_norm_coords[:,:,2:3,:,:,:] # (B,N,2,nx,ny,nz)
         backbone_coords = (projected_coords/4).to(torch.int32) # (B,N,2,nx,ny,nz), backbone output pixel coords
         ib, inn, ix, iy, iz = torch.meshgrid([torch.arange(x.images.shape[0]), torch.arange(x.images.shape[1]), torch.arange(self.bev_norm_coords.shape[1]), torch.arange(self.bev_norm_coords.shape[2]), torch.arange(self.bev_norm_coords.shape[3])])
-        camera_mask = (projected_norm_coords[:,:,2,:,:] >= 0) & \
-                    (backbone_coords[:,:,0,:,:,:] >= 0) & \
-                    (backbone_coords[:,:,1,:,:,:] >= 0) & \
-                    (backbone_coords[:,:,0,:,:,:] >= 0) &  \
-                    (backbone_coords[:,:,0,:,:,:] < backbone_out.shape[4]) & \
-                    (backbone_coords[:,:,1,:,:,:] < backbone_out.shape[3])
-        bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, backbone_coords[:,:,1,:,:,:].clamp(0,backbone_out.shape[3]-1), backbone_coords[:,:,0,:,:,:].clamp(0,backbone_out.shape[4]-1)].movedim(-1,2), 0.0) # (B,N,128,nx,ny,nz)
+        v = backbone_coords[:,:,1,:,:,:]
+        u = backbone_coords[:,:,0,:,:,:]
+        camera_mask = (depth_lift >= self.min_d) & \
+                    (depth_lift <= self.max_d) & \
+                    (u >= 0) & \
+                    (v >= 0) & \
+                    (u < backbone_out.shape[4]) & \
+                    (v < backbone_out.shape[3])
+        depth_lift = depth_lift.clamp(min=self.min_d, max=self.max_d)
+        v = v.clamp(0,backbone_out.shape[3]-1)
+        u = u.clamp(0,backbone_out.shape[4]-1)
+        lo_depth = torch.floor((depth_lift-self.min_d)/self.d_res).int().clamp(min=0, max=self.D-2)
+        hi_depth = lo_depth + 1
+        lo_frac = 1-(depth_lift - self.min_d - lo_depth*self.d_res)/self.d_res
+        hi_frac = 1-lo_frac
+        depth_prob = lo_frac*depth_probs_out[ib, inn, lo_depth, v,u]+hi_frac*depth_probs_out[ib, inn, hi_depth, v, u]
+        bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, v, u].movedim(-1,2)*depth_prob.unsqueeze(2), 0.0) # (B,N,128,nx,ny,nz)
         return (bev_from_backbone.sum(dim=1)/camera_mask.sum(dim=1).unsqueeze(1).clamp(min=1)).sum(dim=4) # mean over cameras, sum over z
 
 class BEVSeg(nn.Module):
@@ -114,9 +148,9 @@ class CameraBEVSeg(nn.Module):
     """
     A composition of the ResNet backbone, BEV lifting, and BEV segmentation models to get BEV segments directly from input image data.
     """
-    def __init__(self, bev_raster_spec: BEVGridSpec, bev_raster_labels: tuple[str, ...], min_z : float, max_z: float, num_z: int):
+    def __init__(self, bev_raster_spec: BEVGridSpec, bev_raster_labels: tuple[str, ...], min_z : float, max_z: float, num_z: int, min_d: float, max_d: float, D: int):
         super().__init__()
-        self.bevlift = BEVLift(ResNetBackbone(), bev_raster_spec, min_z, max_z, num_z)
+        self.bevlift = BEVLift(ResNetBackbone(), FeatureDepthPredictor(D), bev_raster_spec, min_z, max_z, num_z, min_d, max_d, D)
         self.bevseg = BEVSeg(bev_raster_labels)
     
     def forward(self, x: CameraDataBatch):
