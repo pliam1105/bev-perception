@@ -1,0 +1,51 @@
+[21:19:18] [warmups] non-depth (projection) warmup, batch 2
+/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4317.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+model=nodepth  device=cuda  train=323 val=81  trainable params=1281378  batch=2
+epoch   0  train 0.7960  val 0.8179  patience 0  cap 15
+epoch   1  train 0.7507  val 0.8226  patience 0  cap 15
+epoch   2  train 0.7256  val 0.8091  patience 1  cap 15
+epoch   3  train 0.7062  val 0.8576  patience 0  cap 15
+epoch   4  train 0.6904  val 0.8290  patience 1  cap 15
+epoch   5  train 0.6742  val 0.8013  patience 2  cap 15
+epoch   6  train 0.6628  val 0.8017  patience 0  cap 15
+epoch   7  train 0.6516  val 0.8100  patience 1  cap 15
+epoch   8  train 0.6400  val 0.7971  patience 2  cap 15
+epoch   9  train 0.6299  val 0.7882  patience 0  cap 15
+epoch  10  train 0.6189  val 0.8494  patience 0  cap 15
+epoch  11  train 0.6073  val 0.8742  patience 1  cap 15
+epoch  12  train 0.5952  val 0.8043  patience 2  cap 15
+epoch  13  train 0.5821  val 0.8399  patience 3  cap 15
+epoch  14  train 0.5688  val 0.8100  patience 4  cap 15
+early stopping at epoch 14 (best val 0.7882)
+done nodepth. best val 0.7882 -> models/warmup-nodepth/best.pt
+[21:38:40] [warmups] forward-scatter warmup, batch 1
+model=scatter  device=cuda  train=323 val=81  trainable params=1292364  batch=1
+/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4317.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+Traceback (most recent call last):
+  File "/home/pliampas/PROJECTS/bev-perception/scripts/warmup.py", line 166, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/scripts/warmup.py", line 115, in main
+    loss = seg_loss(model(x), target)
+                    ^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/src/bev/models.py", line 230, in forward
+    return self.bevseg(self.bevlift(x))
+                       ^^^^^^^^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pliampas/PROJECTS/bev-perception/src/bev/models.py", line 183, in forward
+    cum_bev_features.index_put_((ib, ic, frustum_bev_grid[:,:,None,:,:,1], frustum_bev_grid[:,:,None,:,:,0]), torch.where(in_grid[:,:,None,:,:], backbone_out[ib, inn, ic, ih_4, iw_4]*depth_probs_out[ib, inn, d, ih_4, iw_4], 0), accumulate=True)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 268.00 MiB. GPU 0 has a total capacity of 5.54 GiB of which 178.69 MiB is free. Including non-PyTorch memory, this process has 5.35 GiB memory in use. Of the allocated memory 4.86 GiB is allocated by PyTorch, and 396.79 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[21:38:51] [warmups] ERROR: scatter warmup failed

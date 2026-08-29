@@ -1,0 +1,24 @@
+model=scatter  device=cuda  train=323 val=81  trainable params=1292364  batch=1
+/home/pliampas/PROJECTS/bev-perception/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4317.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+epoch   0  train 0.8033  val 0.8316  patience 0  cap 15
+epoch   1  train 0.7487  val 0.8318  patience 0  cap 15
+epoch   2  train 0.7203  val 0.7986  patience 1  cap 15
+epoch   3  train 0.6990  val 0.8030  patience 0  cap 15
+epoch   4  train 0.6827  val 0.8596  patience 1  cap 15
+epoch   5  train 0.6681  val 0.8383  patience 2  cap 15
+epoch   6  train 0.6517  val 0.8044  patience 3  cap 15
+epoch   7  train 0.6316  val 0.7778  patience 4  cap 15
+epoch   8  train 0.6098  val 0.7807  patience 0  cap 15
+epoch   9  train 0.5829  val 0.7811  patience 1  cap 15
+epoch  10  train 0.5593  val 0.8061  patience 2  cap 15
+epoch  11  train 0.5419  val 0.7772  patience 3  cap 15
+epoch  12  train 0.5262  val 0.7796  patience 0  cap 15
+epoch  13  train 0.5144  val 0.8344  patience 1  cap 15
+epoch  14  train 0.5032  val 0.8042  patience 2  cap 15
+still improving at cap; extending to 50 epochs
+epoch  15  train 0.4935  val 0.8513  patience 3  cap 50
+epoch  16  train 0.4871  val 0.7974  patience 4  cap 50
+early stopping at epoch 16 (best val 0.7772)
+done scatter. best val 0.7772 -> models/warmup-scatter/best.pt
+[W829 10:33:13.359027702 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

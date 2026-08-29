@@ -180,7 +180,7 @@ class CameraBEVForwardScatter(nn.Module):
             frustum_bev_grid[...,0] = frustum_bev_grid[...,0].clamp(min=0,max=self.bev_raster_spec.nx-1)
             frustum_bev_grid[...,1] = frustum_bev_grid[...,1].clamp(min=0,max=self.bev_raster_spec.ny-1)
 
-            cum_bev_features.index_put_((ib, ic, frustum_bev_grid[:,:,None,:,:,1], frustum_bev_grid[:,:,None,:,:,0]), torch.where(in_grid[:,:,None,:,:], backbone_out[ib, inn, ic, ih_4, iw_4]*depth_probs_out[ib, inn, d, ih_4, iw_4], 0), accumulate=True)
+            cum_bev_features.index_put_((ib, ic, frustum_bev_grid[:,:,None,:,:,1], frustum_bev_grid[:,:,None,:,:,0]), torch.where(in_grid[:,:,None,:,:], backbone_out*depth_probs_out[:, :, d].unsqueeze(2), 0), accumulate=True)
             cum_bev_cameras.index_put_((ib, inn, frustum_bev_grid[:,:,None,:,:,1], frustum_bev_grid[:,:,None,:,:,0]), torch.where(in_grid[:,:,None,:,:], 1, 0).int(), accumulate=True)
         
         return cum_bev_features/(cum_bev_cameras > 0).sum(dim=1).reshape(B,-1,self.bev_raster_spec.nx,self.bev_raster_spec.ny).clamp(min=1)
@@ -225,7 +225,54 @@ class CameraBEVSegScatter(nn.Module):
         super().__init__()
         self.bevlift = CameraBEVForwardScatter(ResNetBackbone(), FeatureDepthPredictor(D), bev_raster_spec, min_d, max_d, D)
         self.bevseg = BEVSeg(bev_raster_labels)
-    
+
+    def forward(self, x: CameraDataBatch):
+        return self.bevseg(self.bevlift(x))
+
+class BEVLiftProjection(nn.Module):
+    """
+    Projection-only BEV lift (no depth prediction): projects the BEV grid into each
+    camera, nearest-samples the stride-4 backbone features, masks out-of-view cells,
+    means over cameras and sums over height. The depth-free baseline for BEVLift.
+
+    It doesn't add any new parameters on top of the backbone.
+    """
+    def __init__(self, backbone: nn.Module, bev_raster_spec: BEVGridSpec, min_z: float, max_z: float, num_z: int):
+        super().__init__()
+        self.backbone = backbone
+        self.bev_raster_spec = bev_raster_spec
+        jj, ii, iz = torch.meshgrid([torch.arange(self.bev_raster_spec.ny), torch.arange(self.bev_raster_spec.nx), torch.arange(num_z)]) # (ny, nx, nz), y-first to match the GT raster
+        zlin = torch.linspace(min_z, max_z, num_z)
+        zs = zlin[iz]
+        xs = self.bev_raster_spec.x_min + (ii+0.5)*self.bev_raster_spec.resolution # (ny, nx, nz)
+        ys = self.bev_raster_spec.y_min + (jj+0.5)*self.bev_raster_spec.resolution # (ny, nx, nz)
+        self.register_buffer("bev_norm_coords", torch.stack([xs, ys, zs, torch.ones_like(xs)])) # (4, ny, nx, nz)
+
+    def forward(self, x: CameraDataBatch): # out: (B,128,ny,nx)
+        backbone_out = self.backbone(x.images.reshape(-1,3,x.images.shape[3],x.images.shape[4])) # (B*N,128,H/4,W/4)
+        backbone_out = backbone_out.reshape(x.images.shape[0], x.images.shape[1], backbone_out.shape[1], backbone_out.shape[2], backbone_out.shape[3]) # (B,N,128,H/4,W/4)
+        projected_norm_coords = torch.tensordot(x.bev2pixel, self.bev_norm_coords, dims=([3],[0])) # (B,N,3,ny,nx,nz)
+        projected_coords = projected_norm_coords[:,:,:2,:,:,:] / projected_norm_coords[:,:,2:3,:,:,:] # (B,N,2,ny,nx,nz)
+        backbone_coords = (projected_coords/4).to(torch.int32) # (B,N,2,ny,nx,nz), backbone output pixel coords
+        ib, inn, ix, iy, iz = torch.meshgrid([torch.arange(x.images.shape[0]), torch.arange(x.images.shape[1]), torch.arange(self.bev_norm_coords.shape[1]), torch.arange(self.bev_norm_coords.shape[2]), torch.arange(self.bev_norm_coords.shape[3])])
+        camera_mask = (projected_norm_coords[:,:,2,:,:] >= 0) & \
+                    (backbone_coords[:,:,0,:,:,:] >= 0) & \
+                    (backbone_coords[:,:,1,:,:,:] >= 0) & \
+                    (backbone_coords[:,:,0,:,:,:] < backbone_out.shape[4]) & \
+                    (backbone_coords[:,:,1,:,:,:] < backbone_out.shape[3])
+        bev_from_backbone = torch.where(camera_mask.unsqueeze(2), backbone_out[ib, inn, :, backbone_coords[:,:,1,:,:,:].clamp(0,backbone_out.shape[3]-1), backbone_coords[:,:,0,:,:,:].clamp(0,backbone_out.shape[4]-1)].movedim(-1,2), 0.0) # (B,N,128,ny,nx,nz)
+        return (bev_from_backbone.sum(dim=1)/camera_mask.sum(dim=1).unsqueeze(1).clamp(min=1)).sum(dim=4) # mean over cameras, sum over z
+
+class CameraBEVSegProjection(nn.Module):
+    """
+    A composition of the ResNet backbone, projection-only BEV lifting, and BEV
+    segmentation, to get BEV segments directly from input image data.
+    """
+    def __init__(self, bev_raster_spec: BEVGridSpec, bev_raster_labels: tuple[str, ...], min_z: float, max_z: float, num_z: int):
+        super().__init__()
+        self.bevlift = BEVLiftProjection(ResNetBackbone(), bev_raster_spec, min_z, max_z, num_z)
+        self.bevseg = BEVSeg(bev_raster_labels)
+
     def forward(self, x: CameraDataBatch):
         return self.bevseg(self.bevlift(x))
 
