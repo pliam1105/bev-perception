@@ -73,6 +73,8 @@ def plot_bev_predictions(
         single = CameraDataBatch(
             channels=camera_batch.channels,
             images=camera_batch.images[i : i + 1],
+            intrinsics=camera_batch.intrinsics[i : i+1],
+            bev2ego=camera_batch.bev2ego[i : i+1],
             bev2pixel=camera_batch.bev2pixel[i : i + 1],
         )
         prob = torch.sigmoid(model(single))[0].cpu().numpy()  # (C, nx, ny)
@@ -141,6 +143,8 @@ def plot_train_val_predictions(
             single = CameraDataBatch(
                 channels=cam.channels,
                 images=cam.images[i : i + 1],
+                intrinsics=cam.intrinsics[i : i+1],
+                bev2ego=cam.bev2ego[i : i+1],
                 bev2pixel=cam.bev2pixel[i : i + 1],
             )
             prob = torch.sigmoid(model(single))[0].cpu().numpy()
