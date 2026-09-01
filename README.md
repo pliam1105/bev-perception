@@ -51,6 +51,9 @@ $$\mathcal{L}=\mathcal{L}_{\text{focal}}+\lambda\,\mathcal{L}_{\text{dice}},\qqu
 
 where $\alpha=(0.25,0.5)$ are the per-class weights for (drivable area, vehicle) — up-weighting the rarer vehicle class.
 
+### Optimization & training
+An Adam optimizer was used, with a learning rate of 1e-4, betas (0.9, 0.999), eps 1e-8, and weight decay 1e-12, together with gradient-norm clipping at 1.0. The batch size was 2 for variants 1 and 2, and 1 for forward scatter (which is more memory-hungry). The models were trained on nuScenes mini-train (323 keyframes) and evaluated on mini-val (81 keyframes). Training ran for up to 15 epochs, extended toward 50 while the validation loss kept dropping, with a patience-based (patience of 5 epochs) early-stopping mechanism on the validation loss. Only the FPN upsampling layers, the depth predictor (variants 2–3), and the BEV segmentation head are trained — the ResNet-18 backbone stays frozen with its BatchNorm in eval — and the lowest-validation-loss checkpoint is kept as `best.pt` (no-depth best at epoch 9, learned-depth at 5, forward-scatter at 11). The training loop lives in `scripts/warmup.py` (driven by `scripts/run_warmups.sh`).
+
 ## Combined architecture
 
 <p align="center"><img src="docs/architecture.png" width="75%" alt="Camera-to-BEV pipeline"></p>
