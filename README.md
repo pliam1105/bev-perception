@@ -1,6 +1,6 @@
 # BEV Perception
 
-An exploration of different ways to fuse image data from multiple cameras into a unified Bird's-Eye View grid representation and use it for downstream tasks like BEV semantic segmentation into driveable areas, vehicles, etc. Each method is trained and evaluated on nuScenes-mini, as a proof-of-concept, with the intent to scale it up to use nuScenes.
+An exploration of different ways to fuse image data from multiple cameras into a unified Bird's-Eye View grid representation and use it for downstream tasks like BEV semantic segmentation into drivable areas, vehicles, etc. Each method is trained and evaluated on nuScenes-mini, as a proof-of-concept, with the intent to scale it up to use nuScenes.
 
 ## Motivation
 
@@ -12,7 +12,7 @@ This project explores various of those methods, based on the projection of featu
 The core of the project is a sequence of camera to BEV lift variants, each a controlled change targeting a specific limitation of the previous one. Every variant maps a `CameraDataBatch` to a `(B, 128, nx, ny)` BEV feature map and is paired with the same downstream `BEVSeg` head, so swapping the lift holds everything else constant, measuring the difference in performance because of this change. The implementation source code is in `src/bev/models.py`.
 
 ### Image preprocessing
-The iamge was downscaled to a resolution of 448x800 with appropriate intrinsics scaling as well, in order to get the memory and compute requirements down to a feasible level for training locally. 
+The image was downscaled to a resolution of 448x800 with appropriate intrinsics scaling as well, in order to get the memory and compute requirements down to a feasible level for training locally. 
 
 ### Backbone: ResNet w/ upsampling with skip connections
 In order to produce a feature map for each input image, I used the ImageNet backbone (with a ResNet architecture), with frozen weights, and extended it with a series of FPN-style upsampling layers with skip connections to the ResNet layers of the same stride. That way, the last layer has stride-4, 128-dimensional features, which are then lifted to the BEV grid using the variants described below.
@@ -22,12 +22,12 @@ In order to produce a feature map for each input image, I used the ImageNet back
 ### Variant 1: no-depth projection lift
 `BEVLiftProjection` / `CameraBEVSegProjection`. Projects each BEV grid cell (sampled at a predefined number of fixed heights) into every camera, nearest-samples the image-space (stride-4, not full resolution) features, masks out-of-view cells, takes the average over cameras and sums over heights, with no depth information being used during the lift.
 
-The reasoning behind this approach is similar to the one of BEVForme (but without attention heads) that the encoder on top of the BEV features would be able to extract depth information for the projected features and de-smear the BEV feature map. However, that would require a deeper encoder head and more data for training, and wasn't effective during my experiments on nuScenes-mini (the output was smeared).
+The reasoning behind this approach is similar to the one of BEVFormer (but without attention heads) that the encoder on top of the BEV features would be able to extract depth information for the projected features and de-smear the BEV feature map. However, that would require a deeper encoder head and more data for training, and wasn't effective during my experiments on nuScenes-mini (the output was smeared).
 
 <p align="center"><img src="docs/lift_v1.png" width="75%" alt="Variant 1 — projected depth at 4 fixed heights, no depth reasoning; ground coloured by the model prediction"></p>
 
 ### Variant 2: learned depth distribution (best on nuScenes-mini)
-`BEVLift` / `CameraBEVSeg`, with `FeatureDepthPredictor`. It was designed to mitigate the smearing issue of Variant 1, by estimating a depth distribution (like Lift-Splat-Shoot) through a depth prediction head (MLP) on top of the image-space feature map, that outputs depth probability over D predefined depth bins. Then, using the same predefined-height-set BEV lifting but weighing each feature by the respective linearly-interpolated depth probability, we get a BEV feature map that's less smeared. This accounted for part of the problem of Variant 1, but the nuScenes-mini dataset was too small to produce meaningful validation results and also the output map was highly dependent on the predefined set of heights in the BEV, limiting the ability of the model to properly project image features to the correct ground XY coordinates or the horizontal position of vehicles.
+`BEVLift` / `CameraBEVSeg`, with `FeatureDepthPredictor`. It was designed to mitigate the smearing issue of Variant 1, by estimating a depth distribution (like Lift-Splat-Shoot) through a depth prediction head (MLP) on top of the image-space feature map, that outputs depth probability over D predefined depth bins. Then, using the same predefined-height-set BEV lifting but weighting each feature by the respective linearly-interpolated depth probability, we get a BEV feature map that's less smeared. This accounted for part of the problem of Variant 1, but the nuScenes-mini dataset was too small for the absolute numbers to mean much, and the output map was highly dependent on the predefined set of heights in the BEV, limiting the ability of the model to properly project image features to the correct ground XY coordinates or the horizontal position of vehicles.
 
 <p align="center"><img src="docs/lift_v2.png" width="75%" alt="Variant 2 — projected depth at 4 fixed heights, learned depth distribution highlighting the surface band"></p>
 
@@ -102,8 +102,8 @@ Qualitative outputs:
 ## Roadmap
 
 - Full nuScenes `trainval` beyond mini (pipeline already supports it — see `scripts/rasterize_bev.py` / `scripts/warmup.py` with the `trainval` splits).
-- Attention-based lift (BEVFormer-style)
-- Lidar fusion into the BEV grid
+- Attention-based lift (BEVFormer-style).
+- Lidar fusion into the BEV grid.
 - Temporal fusion.
 
 ## How to run
