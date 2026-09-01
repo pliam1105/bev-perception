@@ -43,11 +43,11 @@ The loss function used for training the architecture end-to-end (input image to 
 
 With logits $z$, per-pixel probability $p=\sigma(z)$, and target $y\in\{0,1\}$, over classes $c$ and pixels $i$:
 
-$$\mathcal{L}_{\text{focal}}=\operatorname*{mean}_{c,i}\Big[\,\alpha_c\,(1-p)^{\gamma}\,\big(-\log p\big)\,y+(1-\alpha_c)\,p^{\gamma}\,\big(-\log(1-p)\big)\,(1-y)\,\Big]$$
+$$\mathcal{L}_{\text{focal}}=\text{mean}_{c,i}\Big[\,\alpha_c\,(1-p)^{\gamma}\,\big(-\log p\big)\,y+(1-\alpha_c)\,p^{\gamma}\,\big(-\log(1-p)\big)\,(1-y)\,\Big]$$
 
-$$\mathcal{L}_{\text{dice}}=\operatorname*{mean}_{c}\left[\,1-\frac{2\sum_i p_{c,i}\,y_{c,i}+\epsilon}{\sum_i p_{c,i}+\sum_i y_{c,i}+\epsilon}\,\right]$$
+$$\mathcal{L}_{\text{dice}}=\text{mean}_{c}\left[\,1-\frac{2\sum_i p_{c,i}\,y_{c,i}+\epsilon}{\sum_i p_{c,i}+\sum_i y_{c,i}+\epsilon}\,\right]$$
 
-$$\mathcal{L}=\mathcal{L}_{\text{focal}}+\lambda\,\mathcal{L}_{\text{dice}},\qquad \gamma=2,\ \ \alpha=(0.25,\,0.5),\ \ \lambda=1,\ \ \epsilon=10^{-5}$$
+$$\mathcal{L}=\mathcal{L}_{\text{focal}}+\lambda\,\mathcal{L}_{\text{dice}},\qquad \gamma=2,\ \ \alpha=(0.25,\ 0.5),\ \ \lambda=1,\ \ \epsilon=10^{-5}$$
 
 where $\alpha=(0.25,0.5)$ are the per-class weights for (drivable area, vehicle) — up-weighting the rarer vehicle class.
 
